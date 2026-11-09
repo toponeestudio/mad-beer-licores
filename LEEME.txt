@@ -1,0 +1,28 @@
+MAD BEER LICORES - archivos para la subida final
+
+Estructura:
+  public/index.html           la página (tienda + panel)
+  netlify/functions/          servicios seguros: alegra, alegra-sync, alegra-cron (cada 5 min), wompi-sign, wompi-events
+  netlify/lib/                piezas compartidas de esos servicios
+  netlify.toml                configuración de Netlify
+  firestore.rules             reglas de seguridad de Firestore (pegar en Firebase)
+
+Variables de entorno en Netlify (Site configuration > Environment variables):
+  FIREBASE_SERVICE_ACCOUNT    el JSON completo de la clave privada de Firebase (cuenta de servicio)
+  WOMPI_PUBLIC_KEY            llave pública de Wompi (pub_test_... para pruebas, pub_prod_... en producción)
+  WOMPI_INTEGRITY_SECRET      secreto de integridad de Wompi
+  WOMPI_EVENTS_SECRET         secreto de eventos de Wompi
+  (opcional) SITE_URL         dirección final de la página, por ejemplo https://madbeerlicores.com
+
+Eventos de Wompi (dashboard de Wompi, una URL para pruebas y otra para producción):
+  https://TU-SITIO/.netlify/functions/wompi-events
+
+Firebase:
+  - Authentication > Configuración > Dominios autorizados: agregar el dominio de la página
+  - Firestore > Reglas: pegar firestore.rules y publicar
+
+Alegra (sincronización automática)
+  - alegra-cron corre solo cada 5 minutos en el sitio publicado: envía a Alegra las ventas de la página que falten y trae las cantidades de Alegra.
+    Para probarlo sin esperar: Netlify > Logs & metrics > Functions > alegra-cron > Run now (o el botón «Sincronizar todo ahora» del panel).
+  - Necesita que en el panel (Ventas y Alegra) estén el correo y el token de Alegra y esté marcado «Automático».
+  - Después de publicar las reglas de Firestore, haz un pedido de prueba en efectivo para confirmar que se sigue pudiendo crear.

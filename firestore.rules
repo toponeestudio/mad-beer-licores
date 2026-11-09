@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function admin() {
+      return request.auth != null
+        && request.auth.token.email == 'madbeerlicores@gmail.com';
+    }
+    match /config/{id}  { allow read: if true; allow write: if admin(); }
+    match /private/{id} { allow read, write: if admin(); }
+    match /orders/{id} {
+      /* El cliente solo puede crear pedidos «nuevos y sin pagar»: lo demás (pagado, enviado a Alegra, stock) lo escribe el servidor o el negocio */
+      allow create: if request.resource.data.status == 'Recibido'
+        && request.resource.data.get('synced', false) == false
+        && request.resource.data.get('stockApplied', false) == false
+        && request.resource.data.get('paid', false) == false
+        && !('alegra' in request.resource.data)
+        && (request.resource.data.get('pay', '') != 'wompi' || request.resource.data.get('payStatus', '') == 'pendiente');
+      allow get: if true;
+      allow list, update, delete: if admin();
+    }
+  }
+}
