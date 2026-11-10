@@ -35,3 +35,9 @@ AVISOS AL CELULAR (nuevo)
 - iPhone: primero abrir la página en Safari > Compartir > "Agregar a pantalla de inicio", abrirla desde ese ícono y activar los avisos ahí.
 - Llegan: pedido nuevo (efectivo al hacerse; Wompi cuando el pago se aprueba) y productos que entran en "se está acabando" o se agotan.
 - Archivos nuevos: public/sw.js, public/manifest.webmanifest, public/icon-192.png, public/icon-512.png, netlify/functions/push.js, netlify/lib/push.js.
+
+
+REVISION 9-nov (segunda subida)
+- Seguridad del pago: el servidor ahora recalcula el total del pedido con los precios del catálogo (netlify/lib/pricing.js). Wompi no firma un pedido cuyo total no coincide, y un pago aprobado de un pedido manipulado queda en "REVISAR_VALOR". En pedidos en efectivo con el total alterado, el panel muestra una alerta roja.
+- Cliente genérico de Alegra: si "Pedidos web MAD BEER" no existe, se intenta crear con el formato de nombre que piden las cuentas con facturación electrónica (nameObject). Si Alegra no lo permite, la nota del pedido explica que hay que crearlo a mano (Contactos > Nuevo > Cliente, nombre "Pedidos web MAD BEER").
+- Los visitantes de la tienda ahora ven el inventario actualizado cada 2 minutos sin recargar.

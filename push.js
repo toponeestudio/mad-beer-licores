@@ -97,10 +97,12 @@ async function notifyOrder(code) {
   const o = await fs.getDoc('orders', code);
   if (!o || o.status === 'Cancelado' || (o.pay === 'wompi' && o.payStatus !== 'APPROVED')) return { skipped: true };
   if (!(await fs.createDoc('locks', 'push_' + code, { at: Date.now() }))) return { skipped: true, dup: true };
+  let warn = '';
+  try { const pr = await require('./pricing').check(o); if (!pr.ok) { warn = pr.why + ' Revisa antes de cobrar o despachar.'; await fs.patchDoc('orders', code, { warn }); } } catch (e) { /* el aviso sale igual */ }
   const n = Array.isArray(o.lines) ? o.lines.reduce((a, l) => a + (Number(l.qty) || 0), 0) : 0;
   const how = o.mode === 'domicilio' ? 'Domicilio' : 'Recoger';
   const pay = o.pay === 'wompi' ? 'pagado en línea' : 'efectivo';
-  return sendAll({ title: 'Pedido nuevo ' + code, body: [o.name || 'Cliente', money(o.total), how, n + (n === 1 ? ' producto' : ' productos'), pay].join(' · '), tag: code, url: '/#panel' });
+  return sendAll({ title: 'Pedido nuevo ' + code + (warn ? ' (revisar total)' : ''), body: [o.name || 'Cliente', money(o.total), how, n + (n === 1 ? ' producto' : ' productos'), pay].join(' · '), tag: code, url: '/#panel' });
 }
 /* Productos que acaban de entrar en «se está acabando» o de agotarse */
 async function notifyLow(items) {

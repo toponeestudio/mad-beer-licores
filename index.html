@@ -2963,6 +2963,7 @@ function orderCard(o){
     (o.mode === 'domicilio' ? '<div class="small">' + esc(o.addr || 'Sin dirección') + ' <span class="muted">· ' + esc(z.name) + '</span></div>' : '') +
     (o.note ? '<div class="small muted">Indicaciones: ' + esc(o.note) + '</div>' : '') +
     '<div class="items">' + esc(items) + '</div>' +
+    (o.warn ? '<div class="small" style="color:var(--bad);font-weight:600">⚠ ' + esc(o.warn) + '</div>' : '') +
     (o.syncNote && !o.synced ? '<div class="small" style="color:var(--warn)">Alegra: ' + esc(String(o.syncNote).replace(/^Alegra: /, '')) + '</div>' : '') +
     '<div class="small"><b class="num">' + fmt(o.total) + '</b> <span class="muted">(productos ' + fmt(o.sub) + (o.fee ? ' + envío ' + fmt(o.fee) : '') + ')</span> ' +
     (unpaid(o) ? '<span class="pill ' + (/DECLINED|ERROR|VOIDED/.test(o.payStatus) ? 'bad' : 'warn') + '">' + (/DECLINED|ERROR|VOIDED/.test(o.payStatus) ? 'Pago rechazado' : o.payStatus === 'REVISAR_VALOR' ? 'Pago por revisar' : 'Esperando pago') + '</span>' : o.pay === 'wompi' ? '<span class="pill ok">Pagado con Wompi</span>' : '<span class="pill warn">' + (o.status === 'Entregado' ? 'Cobrado en efectivo' : 'Cobrar ' + fmt(o.total) + (o.cash ? ' · paga con ' + fmt(+o.cash || 0) : '')) + '</span>') + '</div></div>' +
@@ -3396,7 +3397,7 @@ var Store = (function(){
       if ((ch || JSON.stringify(S.syncSrv || {}) !== old) && S.route === 'panel' && S.authed && /resumen|inventario|productos|ventas/.test(S.tab) && !typing) redrawTab();
     }).catch(function(){});
   }
-  /* Visitantes: cada 5 minutos con la pestaña a la vista se vuelven a leer las cantidades */
+  /* Visitantes: cada 2 minutos (y al volver a la pestaña) con la pestaña a la vista se vuelven a leer las cantidades */
   function refreshStock(){
     if (!live() || S.authed || document.hidden) return;
     window.MBFB.getDoc('config', 'stock').then(function(sd){ if (applyStockDoc(sd)) softGrids(); }).catch(function(){});
@@ -4031,6 +4032,9 @@ Store.loadPublic();
   if (back && !DEMO_MODE) { S.trackCode = back; S.lastCode = back; S.justOrdered = null; try { sessionStorage.removeItem('mb-pay'); } catch (e) {} location.hash = '#rastrear'; Store.track(back).then(function(){ if (S.route === 'rastrear') $('#view').innerHTML = vRastrear(); }).catch(function(){}); }
 })();
 if (!DEMO_MODE) {
+  var lastStock = Date.now();
+  setInterval(function(){ lastStock = Date.now(); Store.refreshStock(); }, 120000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden && Date.now() - lastStock > 60000) { lastStock = Date.now(); Store.refreshStock(); } });
   setInterval(function(){ var n = new Date(); S.clock = n.getHours() * 60 + n.getMinutes(); Store.rebuild(); }, 60000);
   var lastPoll = 0;
   setInterval(function(){

@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const fs = require('../lib/fs');
 const { resp } = require('../lib/common');
+const { check } = require('../lib/pricing');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return resp(405, { error: 'Método no permitido' });
@@ -16,7 +17,9 @@ exports.handler = async (event) => {
     if (!o || o.pay !== 'wompi') return resp(404, { error: 'Pedido no encontrado' });
     if (o.payStatus === 'APPROVED') return resp(409, { error: 'Este pedido ya está pagado.' });
     if (o.status === 'Cancelado') return resp(409, { error: 'Este pedido fue cancelado.' });
-    const cents = Math.round(Number(o.total) * 100);
+    const pr = await check(o);   /* el total se vuelve a calcular aquí: no se le cree al navegador */
+    if (!pr.ok) return resp(409, { error: pr.why + ' Vuelve a armar el pedido.' });
+    const cents = Math.round(pr.total * 100);
     if (!(cents > 0)) return resp(400, { error: 'Valor inválido' });
     const reference = code + '_' + Date.now().toString(36);
     const signature = crypto.createHash('sha256').update(reference + cents + 'COP' + sec).digest('hex');

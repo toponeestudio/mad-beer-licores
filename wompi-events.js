@@ -3,6 +3,7 @@
    Si el pago se aprueba: el pedido queda pagado, se envía a Alegra y el panel lo muestra con su sonido. */
 const crypto = require('crypto');
 const fs = require('../lib/fs');
+const { check } = require('../lib/pricing');
 
 const ok = (o) => ({ statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o || { ok: true }) });
 const pick = (obj, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), obj);
@@ -27,7 +28,8 @@ exports.handler = async (event) => {
     if (o.payStatus === 'APPROVED') return ok({ already: true });
     const patch = { payStatus: String(t.status || ''), wompiId: String(t.id || ''), payMethod: String(t.payment_method_type || '') };
     if (t.status === 'APPROVED') {
-      if (Math.round(Number(o.total) * 100) !== Number(t.amount_in_cents)) { patch.payStatus = 'REVISAR_VALOR'; await fs.patchDoc('orders', code, patch); return ok({ revisar: true }); }
+      const pr = await check(o);
+      if (!pr.ok || Math.round(pr.total * 100) !== Number(t.amount_in_cents)) { patch.payStatus = 'REVISAR_VALOR'; await fs.patchDoc('orders', code, patch); return ok({ revisar: true }); }
       patch.paid = true;
     }
     await fs.patchDoc('orders', code, patch);
