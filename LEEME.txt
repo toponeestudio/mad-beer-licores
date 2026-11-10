@@ -26,3 +26,12 @@ Alegra (sincronización automática)
     Para probarlo sin esperar: Netlify > Logs & metrics > Functions > alegra-cron > Run now (o el botón «Sincronizar todo ahora» del panel).
   - Necesita que en el panel (Ventas y Alegra) estén el correo y el token de Alegra y esté marcado «Automático».
   - Después de publicar las reglas de Firestore, haz un pedido de prueba en efectivo para confirmar que se sigue pudiendo crear.
+
+
+AVISOS AL CELULAR (nuevo)
+- No hace falta ninguna variable ni cuenta nueva: las claves de los avisos se crean solas la primera vez (quedan en Firestore, private/vapid).
+- Las reglas de Firestore NO cambian (no hay que volver a pegarlas).
+- En el panel: Ajustes > "Avisos en este celular" > "Activar avisos en este equipo". Se activa en cada celular o computador donde quieran recibirlos.
+- iPhone: primero abrir la página en Safari > Compartir > "Agregar a pantalla de inicio", abrirla desde ese ícono y activar los avisos ahí.
+- Llegan: pedido nuevo (efectivo al hacerse; Wompi cuando el pago se aprueba) y productos que entran en "se está acabando" o se agotan.
+- Archivos nuevos: public/sw.js, public/manifest.webmanifest, public/icon-192.png, public/icon-512.png, netlify/functions/push.js, netlify/lib/push.js.
