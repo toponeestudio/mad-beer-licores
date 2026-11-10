@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#02060F">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>MAD BEER Licores</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Big+Shoulders+Display:wght@700;800;900&display=swap">
@@ -2959,6 +2963,7 @@ function orderCard(o){
     (o.mode === 'domicilio' ? '<div class="small">' + esc(o.addr || 'Sin dirección') + ' <span class="muted">· ' + esc(z.name) + '</span></div>' : '') +
     (o.note ? '<div class="small muted">Indicaciones: ' + esc(o.note) + '</div>' : '') +
     '<div class="items">' + esc(items) + '</div>' +
+    (o.warn ? '<div class="small" style="color:var(--bad);font-weight:600">⚠ ' + esc(o.warn) + '</div>' : '') +
     (o.syncNote && !o.synced ? '<div class="small" style="color:var(--warn)">Alegra: ' + esc(String(o.syncNote).replace(/^Alegra: /, '')) + '</div>' : '') +
     '<div class="small"><b class="num">' + fmt(o.total) + '</b> <span class="muted">(productos ' + fmt(o.sub) + (o.fee ? ' + envío ' + fmt(o.fee) : '') + ')</span> ' +
     (unpaid(o) ? '<span class="pill ' + (/DECLINED|ERROR|VOIDED/.test(o.payStatus) ? 'bad' : 'warn') + '">' + (/DECLINED|ERROR|VOIDED/.test(o.payStatus) ? 'Pago rechazado' : o.payStatus === 'REVISAR_VALOR' ? 'Pago por revisar' : 'Esperando pago') + '</span>' : o.pay === 'wompi' ? '<span class="pill ok">Pagado con Wompi</span>' : '<span class="pill warn">' + (o.status === 'Entregado' ? 'Cobrado en efectivo' : 'Cobrar ' + fmt(o.total) + (o.cash ? ' · paga con ' + fmt(+o.cash || 0) : '')) + '</span>') + '</div></div>' +
@@ -3209,14 +3214,15 @@ function tAjustes(){
     '<p class="muted small" style="margin-top:8px">El domingo cierra tarde cuando el lunes siguiente es festivo. Ya están cargados los festivos de 2026 y 2027.</p></div>' +
     '<div class="box2"><h3>Avisos del negocio</h3><p class="muted small" style="margin-bottom:10px">Así se enteran en el negocio cuando entra un pedido.</p><div class="stack" style="gap:12px">' +
     sw('sound', 'Sonido y aviso dentro del panel', n.sound) + sw('lowStock', 'Avisarme cuando un producto se esté acabando', n.lowStock !== false) +
-    '<p class="muted small" style="margin:-4px 0 0 4px">Avisa cuando un producto llega a su mínimo o se agota (el mínimo de cada producto se cambia en Inventario, columna «Avisar cuando queden»). Cuando conectemos WhatsApp o correo, este mismo aviso llegará también al celular.</p>' +
-    sw('whatsapp', 'Mensaje por WhatsApp' + (DEMO_MODE ? '' : ' (próximamente)'), n.whatsapp, !DEMO_MODE) +
+    '<p class="muted small" style="margin:-4px 0 0 4px">Avisa cuando un producto llega a su mínimo o se agota (el mínimo de cada producto se cambia en Inventario, columna «Avisar cuando queden»). Si activas «Avisos en este celular», este mismo aviso te llega también al teléfono.</p>' +
+    pushBox() +
+    (DEMO_MODE ? sw('whatsapp', 'Mensaje por WhatsApp', n.whatsapp, false) +
     '<div class="field"><label for="n-wa">Número de WhatsApp que recibe el aviso (con 57)</label><input id="n-wa" data-chg="notif" data-key="waTo" placeholder="57300XXXXXXX" value="' + esc(n.waTo) + '"></div>' +
-    sw('email', 'Correo electrónico' + (DEMO_MODE ? '' : ' (próximamente)'), n.email, !DEMO_MODE) +
-    '<div class="field"><label for="n-em">Correo que recibe el aviso</label><input id="n-em" type="email" data-chg="notif" data-key="emailTo" value="' + esc(n.emailTo) + '"></div></div>' +
-    '<p style="margin-top:14px"><button class="btn btn-amber btn-sm" data-act="notif-test">Enviar aviso de prueba</button></p>' +
+    sw('email', 'Correo electrónico', n.email, false) +
+    '<div class="field"><label for="n-em">Correo que recibe el aviso</label><input id="n-em" type="email" data-chg="notif" data-key="emailTo" value="' + esc(n.emailTo) + '"></div>' : '<p class="muted small" style="margin:2px 0 0 4px">WhatsApp y correo: próximamente.</p>') + '</div>' +
+    '<p style="margin-top:14px"><button class="btn btn-ghost btn-sm" data-act="notif-test">Probar el sonido del panel</button></p>' +
     '<div class="logbox" style="margin-top:12px">' + (S.notifLog.length ? S.notifLog.map(function(x){ return '<div>' + esc(x) + '</div>'; }).join('') : '<p>Aún no hay avisos en esta sesión.</p>') + '</div>' +
-    '<p class="muted small" style="margin-top:10px">' + (DEMO_MODE ? 'Vista previa: los avisos solo se simulan.' : 'El sonido y el aviso suenan solo mientras el panel está abierto en el computador o el celular del negocio. WhatsApp y correo todavía no están conectados.') + '</p></div></div>' +
+    '<p class="muted small" style="margin-top:10px">' + (DEMO_MODE ? 'Vista previa: los avisos solo se simulan.' : 'El sonido del panel suena solo mientras el panel está abierto. Para enterarse con la página cerrada, activa «Avisos en este celular» en cada equipo que quieran usar.') + '</p></div></div>' +
     '<div class="pgrid"><div class="box2"><h3>Domicilios</h3><div class="fgrid">' +
     '<div class="field"><label for="s-min">Pedido mínimo</label><input id="s-min" inputmode="numeric" data-chg="set" data-key="minOrder" value="' + st.minOrder + '"></div>' +
     '<div class="field"><label for="s-free">Envío gratis en Zona 1 desde</label><input id="s-free" inputmode="numeric" data-chg="set" data-key="freeFrom" value="' + st.freeFrom + '"></div></div>' +
@@ -3234,6 +3240,18 @@ function tAjustes(){
     st.riders.map(function(r){ return '<div class="sum" style="padding:6px 0;border-bottom:1px solid var(--line)"><b>' + esc(r) + '</b><button class="rm" data-act="rider-rm" data-name="' + esc(r) + '">Quitar</button></div>'; }).join('') +
     '<div class="row" style="margin-top:12px"><div class="field grow"><label class="sr" for="newrider">Nuevo domiciliario</label><input id="newrider" placeholder="Nombre del domiciliario"></div><button class="btn btn-amber btn-sm" data-act="rider-add">Agregar</button></div></div>' +
     '<div class="box2"><h3>Acceso al panel</h3><p class="muted small">Correo con acceso: <b style="color:var(--ink)">' + esc(st.adminEmail) + '</b></p><p class="muted small" style="margin-top:8px">La clave y el cambio de clave se manejan con Firebase Authentication en la versión final: cada persona del equipo entra con su correo y su clave.</p></div></div></div>';
+}
+
+/* Recuadro «Avisos en este celular» (Ajustes) */
+function pushBox(){
+  var p = Push.st, why = Push.why(), dis = p.busy ? ' disabled' : '';
+  return '<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:4px 0">' +
+    '<b>Avisos en este celular</b>' +
+    '<p class="muted small" style="margin:4px 0 8px">Suena y vibra cuando entra un pedido o se acaba un producto, aunque la página esté cerrada. Se activa en cada equipo (celular o computador) donde quieran recibirlos.</p>' +
+    (why ? '<p class="small" style="color:var(--warn)">' + esc(why) + '</p>' :
+      '<p class="small" style="margin-bottom:8px">Este equipo: <b style="color:' + (p.on ? 'var(--ok)' : 'var(--ink-dim)') + '">' + (p.on ? 'Activado' : 'Sin activar') + '</b></p>' +
+      '<div class="row">' + (p.on ? '<button class="btn btn-amber btn-sm" data-act="push-test"' + dis + '>Enviar aviso de prueba al celular</button><button class="btn btn-ghost btn-sm" data-act="push-off"' + dis + '>Desactivar en este equipo</button>' : '<button class="btn btn-amber btn-sm" data-act="push-on"' + dis + '>Activar avisos en este equipo</button>') + '</div>') +
+    (p.msg ? '<p class="small" style="margin-top:8px">' + esc(p.msg) + '</p>' : '') + '</div>';
 }
 
 /* =====================================================================
@@ -3379,7 +3397,7 @@ var Store = (function(){
       if ((ch || JSON.stringify(S.syncSrv || {}) !== old) && S.route === 'panel' && S.authed && /resumen|inventario|productos|ventas/.test(S.tab) && !typing) redrawTab();
     }).catch(function(){});
   }
-  /* Visitantes: cada 5 minutos con la pestaña a la vista se vuelven a leer las cantidades */
+  /* Visitantes: cada 2 minutos (y al volver a la pestaña) con la pestaña a la vista se vuelven a leer las cantidades */
   function refreshStock(){
     if (!live() || S.authed || document.hidden) return;
     window.MBFB.getDoc('config', 'stock').then(function(sd){ if (applyStockDoc(sd)) softGrids(); }).catch(function(){});
@@ -3637,6 +3655,77 @@ function alegraSyncAll(){
 }
 function alegraAuto(){}
 
+/* ----- Avisos al celular (Web Push). En la página publicada los manda el servidor; en la vista previa solo se simulan ----- */
+var Push = (function(){
+  var st = { on:false, busy:false, msg:'' };
+  function can(){ return !DEMO_MODE && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function ios(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+  function standalone(){ try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } }
+  function redraw(){ if (S.route === 'panel' && S.authed && S.tab === 'ajustes') redrawTab(); }
+  function why(){
+    if (DEMO_MODE || can()) return '';
+    if (ios() && !standalone()) return 'En iPhone primero instala la página: en Safari toca Compartir, «Agregar a pantalla de inicio», abre la página desde ese ícono y vuelve a esta pantalla.';
+    return 'Este navegador no permite avisos. Usa Chrome en Android o en el computador.';
+  }
+  function api(body){
+    return fetch('/.netlify/functions/push', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) }).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw new Error(j.error || ('Error ' + r.status)); return j; });
+    });
+  }
+  function authApi(body){
+    if (!window.MBFB || !window.MBFB.idToken) return Promise.reject(new Error('Entra de nuevo al panel.'));
+    return window.MBFB.idToken().then(function(tk){ body.idToken = tk; return api(body); });
+  }
+  function key2bytes(s){
+    var b = (s + '==='.slice((s.length + 3) % 4)).replace(/-/g, '+').replace(/_/g, '/'), raw = atob(b), a = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) a[i] = raw.charCodeAt(i);
+    return a;
+  }
+  /* ¿Este equipo ya está activado? */
+  function refresh(){
+    if (!can()) return Promise.resolve();
+    return navigator.serviceWorker.getRegistration('/').then(function(reg){ return reg ? reg.pushManager.getSubscription() : null; })
+      .then(function(sub){ var on = !!sub && Notification.permission === 'granted'; if (on !== st.on) { st.on = on; redraw(); } }).catch(function(){});
+  }
+  function enable(){
+    if (DEMO_MODE) { st.on = true; toast('Avisos al celular activados (simulado)'); redraw(); return; }
+    if (!can() || st.busy) return;
+    st.busy = true; st.msg = 'Activando…'; redraw();
+    Notification.requestPermission().then(function(p){
+      if (p !== 'granted') throw new Error('No diste permiso. Se activa desde el candado de la barra de direcciones, en «Notificaciones».');
+      return navigator.serviceWorker.register('/sw.js');
+    }).then(function(){ return navigator.serviceWorker.ready; }).then(function(reg){
+      return api({ action:'key' }).then(function(k){
+        return reg.pushManager.getSubscription().then(function(old){ return old || reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:key2bytes(k.key) }); });
+      });
+    }).then(function(sub){ return authApi({ action:'subscribe', sub:sub.toJSON() }); })
+      .then(function(){ st.on = true; st.msg = ''; toast('Listo: este equipo recibirá los avisos'); })
+      .catch(function(e){ st.msg = 'No se pudo activar: ' + (e.message || e); })
+      .then(function(){ st.busy = false; redraw(); });
+  }
+  function disable(){
+    if (DEMO_MODE) { st.on = false; toast('Avisos al celular desactivados (simulado)'); redraw(); return; }
+    if (!can() || st.busy) return;
+    st.busy = true; redraw();
+    navigator.serviceWorker.getRegistration('/').then(function(reg){ return reg ? reg.pushManager.getSubscription() : null; }).then(function(sub){
+      if (!sub) return;
+      return authApi({ action:'unsubscribe', endpoint:sub.endpoint }).catch(function(){}).then(function(){ return sub.unsubscribe(); });
+    }).then(function(){ st.on = false; st.msg = ''; toast('Este equipo ya no recibirá avisos'); })
+      .catch(function(e){ st.msg = 'No se pudo desactivar: ' + (e.message || e); })
+      .then(function(){ st.busy = false; redraw(); });
+  }
+  function test(){
+    if (DEMO_MODE) { notifyNewOrder({ code:'MB-PRUEBA' }, true); toast('Aviso de prueba enviado (simulado)'); return; }
+    if (st.busy) return;
+    st.busy = true; st.msg = 'Enviando prueba…'; redraw();
+    authApi({ action:'test' }).then(function(r){
+      st.msg = !r.devices ? 'Todavía no hay ningún celular activado.' : r.sent ? 'Aviso enviado a ' + r.sent + (r.sent === 1 ? ' equipo.' : ' equipos.') + (r.failed ? ' Falló en ' + r.failed + '.' : '') : 'No se pudo entregar. Desactiva y vuelve a activar este equipo.';
+    }).catch(function(e){ st.msg = 'No se pudo enviar: ' + (e.message || e); })
+      .then(function(){ st.busy = false; redraw(); });
+  }
+  return { st:st, why:why, refresh:refresh, enable:enable, disable:disable, test:test };
+})();
+
 /* =====================================================================
    6) ACCIONES, EVENTOS Y ARRANQUE
    ===================================================================== */
@@ -3802,6 +3891,9 @@ var A = {
     S.newImg = ''; toast('Producto agregado: ' + name); redrawTab();
   },
   'alegra-test':function(){ alegraTest(); },
+  'push-on':function(){ Push.enable(); },
+  'push-off':function(){ Push.disable(); },
+  'push-test':function(){ Push.test(); },
   'alegra-import':function(){ alegraImport(); },
   'alegra-sync':function(){ alegraSyncAll(); },
   'notif-test':function(){ notifyNewOrder({ code:'MB-PRUEBA' }, true); toast(DEMO_MODE ? 'Aviso de prueba enviado (simulado)' : 'Si no lo oíste, sube el volumen del equipo'); },
@@ -3930,7 +4022,7 @@ if (!DEMO_MODE && window.MBFB) {
     S.authChecking = false;
     S.authed = !!(u && (u.email || '').toLowerCase() === S.set.adminEmail.toLowerCase());
     if (u && !S.authed) window.MBFB.signOut();
-    if (S.authed) Store.onAdmin(); else Store.offAdmin();
+    if (S.authed) { Store.onAdmin(); Push.refresh(); } else Store.offAdmin();
     if (S.route === 'panel') go();
   });
 }
@@ -3940,6 +4032,9 @@ Store.loadPublic();
   if (back && !DEMO_MODE) { S.trackCode = back; S.lastCode = back; S.justOrdered = null; try { sessionStorage.removeItem('mb-pay'); } catch (e) {} location.hash = '#rastrear'; Store.track(back).then(function(){ if (S.route === 'rastrear') $('#view').innerHTML = vRastrear(); }).catch(function(){}); }
 })();
 if (!DEMO_MODE) {
+  var lastStock = Date.now();
+  setInterval(function(){ lastStock = Date.now(); Store.refreshStock(); }, 120000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden && Date.now() - lastStock > 60000) { lastStock = Date.now(); Store.refreshStock(); } });
   setInterval(function(){ var n = new Date(); S.clock = n.getHours() * 60 + n.getMinutes(); Store.rebuild(); }, 60000);
   var lastPoll = 0;
   setInterval(function(){

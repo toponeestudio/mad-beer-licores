@@ -5,6 +5,7 @@
 const fs = require('../lib/fs');
 const { resp, isAdmin } = require('../lib/common');
 const { runSync, sendable } = require('../lib/sync');
+const push = require('../lib/push');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return resp(405, { error: 'Método no permitido' });
@@ -15,6 +16,7 @@ exports.handler = async (event) => {
     if (!/^MB-[A-Z0-9]{6}$/.test(code)) return resp(400, { ok: false });
     try {
       const o = await fs.getDoc('orders', code);
+      if (o && Date.now() - Number(o.ts || 0) <= 15 * 60000) { try { await push.notifyOrder(code); } catch (e) { /* el cron lo reintenta */ } }
       if (!o || !sendable(o) || Date.now() - Number(o.ts || 0) > 15 * 60000) return resp(200, { ok: true, skipped: true });
       const r = await runSync({ only: code });
       return resp(200, { ok: true, sent: r.sent.length });

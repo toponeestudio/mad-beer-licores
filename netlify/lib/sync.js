@@ -5,6 +5,7 @@
    Se ejecuta: cada 5 minutos (alegra-cron.mjs), al entrar un pedido (alegra-sync.js) y con el botón del panel. */
 const fs = require('./fs');
 const { makeApi, allItems } = require('./alegra');
+const push = require('./push');
 
 const MAX_AGE = 7 * 86400000;      /* en automático no se envían ventas de hace más de 7 días */
 const RUN_LOCK_MS = 120000;
@@ -25,15 +26,30 @@ async function acquireRun() {
 }
 const releaseRun = () => fs.delDoc('locks', 'run').catch(() => {});
 
+/* Nombre del cliente genérico al que se le facturan las ventas de la página */
+const CLIENT_NAME = 'Pedidos web MAD BEER';
+const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+function clientName(c) {
+  const o = c && c.nameObject;
+  return norm((c && c.name) || (o && [o.firstName, o.secondName, o.lastName, o.secondLastName].filter(Boolean).join(' ')) || '');
+}
 async function ensureClient(api, saved) {
   if (saved) return saved;
-  const name = 'Pedidos web MAD BEER';
-  const found = await api('GET', '/contacts?start=0&limit=10&query=' + encodeURIComponent(name));
+  const found = await api('GET', '/contacts?start=0&limit=30&query=' + encodeURIComponent(CLIENT_NAME));
   const arr = Array.isArray(found) ? found : (found && found.data) || [];
-  const hit = arr.filter((c) => (c.name || '').trim().toLowerCase() === name.toLowerCase())[0];
+  const hit = arr.filter((c) => clientName(c) === norm(CLIENT_NAME))[0];
   if (hit) return hit.id;
-  const c = await api('POST', '/contacts', { name, type: ['client'] });
-  return c.id;
+  /* Las cuentas de Alegra con facturación electrónica piden el nombre en partes (nameObject): se prueban las dos formas */
+  const nameObject = { firstName: 'Pedidos web', lastName: 'MAD BEER' };
+  const tries = [{ name: CLIENT_NAME, type: ['client'] }, { nameObject, type: ['client'] }, { name: CLIENT_NAME, nameObject, type: ['client'] }];
+  let last = null;
+  for (const body of tries) {
+    try { const c = await api('POST', '/contacts', body); if (c && c.id) return c.id; }
+    catch (e) { last = e; if (!(e.status >= 400 && e.status < 500) || e.status === 401 || e.status === 429) throw e; }
+  }
+  const err = new Error('No se pudo crear el cliente «' + CLIENT_NAME + '» en Alegra (' + (last && last.message) + '). Créalo a mano en Alegra (Contactos > Nuevo, tipo Cliente) con ese nombre y vuelve a sincronizar.');
+  err.general = true;   /* no tiene sentido seguir con los demás pedidos en esta pasada */
+  throw err;
 }
 
 /* opts.force: viene del botón del panel (ignora el interruptor automático y la edad del pedido)
@@ -107,7 +123,7 @@ async function runSync(opts) {
         await fs.delDoc('locks', o.code).catch(() => {});
         stillPending.push(o); out.error = e.message; say(o.code + ': Alegra no la recibió. ' + e.message);
         await fs.patchDoc('orders', o.code, { syncNote: 'Alegra: ' + e.message }).catch(() => {});
-        if (!(e.status >= 400 && e.status < 500) || e.status === 401 || e.status === 429) stop = true;   /* error del pedido: se sigue con el resto; error general: se para */
+        if (e.general || !(e.status >= 400 && e.status < 500) || e.status === 401 || e.status === 429) stop = true;   /* error del pedido: se sigue con el resto; error general: se para */
       }
     }
 
@@ -156,6 +172,14 @@ async function runSync(opts) {
       log: log.reverse().concat(oldLog).slice(0, 40)
     });
     out.news = news;
+
+    /* Aviso al celular: solo los que ENTRAN en «se está acabando» o se agotan (no se repite mientras sigan bajos).
+       La primera vez solo se toma la foto de cómo están, sin avisar. */
+    if (Array.isArray(prev.low) && settings.notif && settings.notif.lowStock !== false) {
+      const was = {}; prev.low.forEach((x) => { was[x.id] = x; });
+      const fresh = low.filter((x) => !was[x.id] || (was[x.id].qty > 0 && x.qty <= 0));
+      if (fresh.length) { try { await push.notifyLow(fresh); } catch (e) { /* el aviso es un extra: no frena la sincronización */ } }
+    }
   } finally { await releaseRun(); }
   return out;
 }
