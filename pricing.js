@@ -21,6 +21,7 @@ async function check(o) {
   const zones = Array.isArray(st.zones) && st.zones.length ? st.zones : DEF_ZONES;
   const free = Number.isFinite(Number(st.freeFrom)) && st.freeFrom !== undefined && st.freeFrom !== null ? Number(st.freeFrom) : DEF_FREE;
   let fee;
+  if (o.mode !== 'recoger' && st.delivery !== true) return { ok: false, why: 'Los domicilios están apagados en la tienda.' };
   if (o.mode === 'recoger') fee = 0;
   else { const z = zones.filter((x) => x.id === o.zone)[0]; if (!z) return { ok: false, why: 'La zona de entrega no existe.' }; fee = o.zone === 'z1' && sub >= free ? 0 : Number(z.fee) || 0; }
   const total = sub + fee;
