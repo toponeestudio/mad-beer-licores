@@ -2031,7 +2031,7 @@ var S = {
     { id:'frio', kind:'frio', secs:6, on:true }, { id:'ofertas', kind:'ofertas', secs:6, on:true },
     { id:'combos', kind:'combos', secs:6, on:true }, { id:'domicilio', kind:'domicilio', secs:6, on:true }
   ],
-  alegra:{ email:'', token:'', connected:false, clientId:'', syncPrice:false, addNew:true, invoiceStatus:'open', lastSync:'' },
+  alegra:{ email:'', token:'', connected:false, clientId:'', syncPrice:false, priceAuto:true, addNew:true, invoiceStatus:'open', lastSync:'' },
   notif:{ sound:true, lowStock:true, whatsapp:false, waTo:'', email:true, emailTo:'madbeerlicores@gmail.com' },
   set:{
     open:true, wompi:false, delivery:DEMO_MODE, minOrder:20000, freeFrom:90000,
@@ -3226,6 +3226,8 @@ function srvStatus(){
   msg.push('Última revisión automática: <b>' + horaTxt(d.getHours() * 60 + d.getMinutes()) + '</b>' + (st.ok ? '' : ' <span class="pill warn">con error</span>'));
   if (st.error) msg.push('Alegra respondió: ' + esc(st.error));
   if (st.pending) msg.push('<b>' + st.pending + '</b> ventas todavía sin enviar (mira el registro).');
+  if (st.priceN) msg.push('Precios tomados de Alegra: <b>' + st.priceN + '</b> cambiaron' + (Array.isArray(st.priceChanged) && st.priceChanged.length ? ' (ej.: ' + st.priceChanged.slice(0, 3).map(function(x){ return esc(x.name) + ' ' + fmt(x.from) + ' → ' + fmt(x.to); }).join('; ') + ')' : '') + '.');
+  if (st.priceSuspectN) msg.push('<b>Ojo:</b> ' + st.priceSuspectN + ' productos tienen en Alegra un precio que no supera el costo de compra' + (Array.isArray(st.priceSuspect) && st.priceSuspect.length ? ' (ej.: ' + st.priceSuspect.slice(0, 3).map(function(x){ return esc(x.name) + ' ' + fmt(x.price) + ' / costo ' + fmt(x.cost); }).join('; ') + ')' : '') + '. No se les cambió el precio: revisa la lista de precios de venta en Alegra.');
   if (st.news) msg.push('<b>' + st.news + '</b> productos de Alegra aún no están en la tienda: toca «Traer inventario».');
   return '<p class="small" style="margin-top:10px">' + msg.join('<br>') + '</p>';
 }
@@ -3238,7 +3240,7 @@ function tVentas(){
     '<div class="stack" style="gap:12px"><div class="field"><label for="al-mail">Correo de tu cuenta en Alegra</label><input id="al-mail" type="email" data-chg="alegra" data-key="email" placeholder="correo@ejemplo.com" value="' + esc(a.email) + '"></div>' +
     '<div class="field"><label for="al-tok">Token de la API de Alegra</label><input id="al-tok" type="password" data-chg="alegra" data-key="token" placeholder="Pega aquí el token" autocomplete="off" value="' + (a.token ? '••••••••••••' : '') + '"></div></div>' +
     '<div class="row" style="margin-top:14px"><button class="btn btn-amber btn-sm" data-act="alegra-test"' + (busy ? ' disabled' : '') + '>Probar conexión</button><button class="btn btn-ghost btn-sm" data-act="alegra-import"' + (busy || !a.connected ? ' disabled' : '') + '>Traer inventario de Alegra</button><button class="btn btn-ghost btn-sm" data-act="alegra-sync"' + (busy || !a.connected ? ' disabled' : '') + '>Sincronizar todo ahora</button></div>' +
-    sw('syncPrice', a.syncPrice, 'También traer los precios de Alegra') +
+    sw('priceAuto', a.priceAuto !== false, 'Usar siempre los precios de Alegra (se actualizan solos cada 5 min; cámbialos en Alegra, no en la página)') +
     sw('addNew', a.addNew, 'Crear en la tienda, ocultos, los productos de Alegra que aún no están aquí') +
     '<label class="sw" style="margin-top:10px"><input type="checkbox" id="autosync" data-chg="autosync"' + (S.autoSync ? ' checked' : '') + '><span>' + (DEMO_MODE ? 'Automático: enviar ventas nuevas y traer el inventario cada 5 minutos' : 'Automático: la página envía sola cada venta a Alegra y trae el inventario cada 5 minutos, aunque el panel esté cerrado') + '</span></label>' + srvStatus() +
     '<div class="field" style="margin-top:12px"><label for="al-st">Las facturas se crean como</label><select id="al-st" data-chg="alegraopt" data-key="invoiceStatus"><option value="open"' + (a.invoiceStatus !== 'draft' ? ' selected' : '') + '>Abiertas (descuentan inventario en Alegra)</option><option value="draft"' + (a.invoiceStatus === 'draft' ? ' selected' : '') + '>Borrador (tú las revisas en Alegra)</option></select></div>' +
@@ -3335,6 +3337,8 @@ var Store = (function(){
     if (!X.srvStock) return false;
     var ch = false;
     P.forEach(function(p){ var v = sd.q[p.id]; if (v != null && p.stock !== v) { p.stock = v; ch = true; } });
+    /* Precios de Alegra (la sincronización del servidor los manda en sd.pr) */
+    if (sd.pr) P.forEach(function(p){ var v = Number(sd.pr[p.id]); if (v > 0 && p.price !== v) { p.price = v; if (p.old && p.old <= v) p.old = 0; ch = true; } });
     return ch;
   }
   function catSig(){ return JSON.stringify({ products:P.map(function(p){ var d = prodDoc(p); if (X.srvStock) delete d.stock; return d; }) }); }
@@ -3598,7 +3602,7 @@ function alegraTest(){
 function fetchAllItems(){
   var all = [];
   function page(start){
-    return alegraCall('items', { start:start }).then(function(r){
+    return alegraCall('items', { start:start, priceList:S.alegra.priceList, priceTax:S.alegra.priceTax }).then(function(r){
       var l = r.items || []; all = all.concat(l);
       if (l.length >= 30 && start < 1500) return page(start + 30);
       return all;
@@ -3620,7 +3624,9 @@ function applyItems(items){
     if (!p) { p = byFull[nn]; if (!p && byName[nn] && byName[nn].length === 1) p = byName[nn][0]; if (p && !p.alegraId) { p.alegraId = it.id; byAid[it.id] = p; res.linked++; } else if (p && p.alegraId !== it.id) p = null; }
     if (p) {
       if (it.qty != null) p.stock = Math.max(0, Math.round(it.qty));
-      if (S.alegra.syncPrice && it.price > 0) { p.price = Math.round(it.price); if (p.old && p.old <= p.price) p.old = 0; }
+      if (it.taxRate > 0) p.alRate = it.taxRate; else delete p.alRate;
+      if (S.alegra.priceAuto !== false && it.price > 0 && !it.suspect) { p.price = Math.round(it.price); if (p.old && p.old <= p.price) p.old = 0; }
+      if (it.suspect) res.suspect = (res.suspect || 0) + 1;
       res.updated++;
     } else if (S.alegra.addNew && it.price > 0) {
       var cat = guessCat(it.name, it.category), np = { id:nextId(), name:prettyName(it.name), size:sizeOf(it.name), cat:cat, price:Math.round(it.price), stock:it.qty != null ? Math.max(0, Math.round(it.qty)) : 0, min:defMin(cat, it.category),
@@ -3637,7 +3643,7 @@ function alegraImport(){
   return fetchAllItems().then(function(items){
     var r = applyItems(items), d = new Date();
     S.alegra.lastSync = horaTxt(d.getHours() * 60 + d.getMinutes());
-    alegraLog('Inventario de Alegra: ' + r.items + ' productos leídos, ' + r.updated + ' actualizados' + (r.linked ? ', ' + r.linked + ' enlazados por nombre' : '') + (r.created ? ', ' + r.created + ' nuevos (ocultos para que los revises)' : ''));
+    alegraLog('Inventario de Alegra: ' + r.items + ' productos leídos, ' + r.updated + ' actualizados' + (r.linked ? ', ' + r.linked + ' enlazados por nombre' : '') + (r.created ? ', ' + r.created + ' nuevos (ocultos para que los revises)' : '') + (r.suspect ? '. Ojo: ' + r.suspect + ' tienen en Alegra un precio que no supera el costo de compra; no se les cambió el precio' : ''));
     toast(r.updated + ' productos actualizados' + (r.created ? ' · ' + r.created + ' nuevos ocultos' : ''));
     return r;
   }).catch(function(e){ alegraLog('Error al traer el inventario: ' + e.message); toast('No se pudo traer el inventario: ' + e.message); })
@@ -3653,7 +3659,7 @@ function ensureClient(){
   return alegraCall('client', { name:'Pedidos web MAD BEER' }).then(function(r){ S.alegra.clientId = r.id; return r.id; });
 }
 function sendOne(o){
-  var miss = [], items = o.lines.map(function(l){ var p = byId(l.id); if (!p || !p.alegraId) { miss.push(p ? p.name : 'producto ' + l.id); return null; } return { id:p.alegraId, price:l.price, quantity:l.qty }; });
+  var miss = [], items = o.lines.map(function(l){ var p = byId(l.id); if (!p || !p.alegraId) { miss.push(p ? p.name : 'producto ' + l.id); return null; } return { id:p.alegraId, price:(p.alRate > 0 && S.alegra.priceTax !== 'none' ? Math.round(l.price / (1 + p.alRate) * 100) / 100 : l.price), quantity:l.qty }; });
   if (miss.length) return Promise.resolve({ skip:'faltan enlazar con Alegra: ' + miss.join(', ') });
   var obs = 'Pedido web ' + o.code + ' · ' + o.name + ' · ' + o.phone + ' · ' + (o.mode === 'domicilio' ? 'domicilio a ' + o.addr : 'recoger en el local') + ' · ' + (o.pay === 'wompi' ? 'pagado en línea' : 'efectivo al recibir') + (o.fee ? ' · domicilio cobrado ' + fmt(o.fee) : '');
   return ensureClient().then(function(cid){

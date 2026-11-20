@@ -26,7 +26,8 @@ exports.handler = async (event) => {
       const start = Math.max(0, parseInt(p.start, 10) || 0);
       const l = await call('GET', '/items?start=' + start + '&limit=30&status=active&mode=advanced');
       const arr = Array.isArray(l) ? l : (l && l.data) || [];
-      return resp(200, { items: arr.map(normItem) });
+      const o = { priceList: p.priceList, priceTax: p.priceTax };
+      return resp(200, { items: arr.map((x) => normItem(x, o)) });
     }
     if (b.action === 'client') {
       const name = String(p.name || 'Pedidos web MAD BEER').slice(0, 80);
