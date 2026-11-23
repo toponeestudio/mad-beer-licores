@@ -3280,7 +3280,7 @@ var Store = (function(){
     X.srvStock = !!(sd && sd.on === true && sd.q);
     if (!X.srvStock) return false;
     var ch = false;
-    P.forEach(function(p){ var v = sd.q[p.id]; if (v != null && p.stock !== v) { p.stock = v; ch = true; } });
+    P.forEach(function(p){ var v = sd.q[p.id]; if (v != null && p.stock !== v) { p.stock = v; ch = true; } var pv = sd.pr ? Number(sd.pr[p.id]) : 0; if (pv > 0 && p.price !== pv) { p.price = pv; ch = true; } });
     return ch;
   }
   function catSig(){ return JSON.stringify({ products:P.map(function(p){ var d = prodDoc(p); if (X.srvStock) delete d.stock; return d; }) }); }
