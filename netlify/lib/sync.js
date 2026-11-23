@@ -77,6 +77,9 @@ async function runSync(opts) {
     const prods = Array.isArray(catalog.products) ? catalog.products : [];
     const byId = {}; prods.forEach((p) => { byId[p.id] = p; });
     const prev = (await fs.getDoc('private', 'syncstate')) || {};
+    /* Precios que Alegra mandó en la pasada anterior. Un pedido hecho justo antes del cambio (con el precio viejo) también se acepta: se factura al precio que pagó el cliente. */
+    const stock0 = (await fs.getDoc('config', 'stock')) || {};
+    const effPrice = (p) => (stock0.pr && Number(stock0.pr[p.id]) > 0 ? Number(stock0.pr[p.id]) : Number(p.price));
     let clientId = prev.clientId || al.clientId || '';
 
     /* ---- 1) Ventas pendientes -> facturas ---- */
@@ -89,7 +92,7 @@ async function runSync(opts) {
     for (const o of pending) {
       if (stop) { stillPending.push(o); continue; }
       /* La página arma el pedido, así que se revisa que cantidades y precios sean los del catálogo antes de facturar */
-      const bad = o.lines.filter((l) => { const p = byId[l.id]; return !(Number(l.qty) >= 1 && Number(l.qty) <= 500 && Number.isInteger(Number(l.qty))) || (p && !opts.force && Number(l.price) !== Number(p.price)); });
+      const bad = o.lines.filter((l) => { const p = byId[l.id]; return !(Number(l.qty) >= 1 && Number(l.qty) <= 500 && Number.isInteger(Number(l.qty))) || (p && !opts.force && Number(l.price) !== effPrice(p) && Number(l.price) !== Number(p.price)); });
       if (bad.length) {
         const why = 'Cantidades o precios distintos al catálogo; revisa el pedido y envíalo a mano con «Enviar pendientes».';
         out.skipped.push({ code: o.code, why }); stillPending.push(o);
@@ -100,7 +103,9 @@ async function runSync(opts) {
       const items = o.lines.map((l) => {
         const p = byId[l.id];
         if (!p || !p.alegraId) { miss.push(p ? p.name : 'producto ' + l.id); return null; }
-        return { id: Number(p.alegraId), price: Number(l.price), quantity: Number(l.qty) };
+        /* La tienda cobra con IVA; Alegra suma el IVA del ítem encima, así que se le manda el precio sin IVA para que la factura dé lo mismo que pagó el cliente */
+        const rt = al.priceTax === 'none' ? 0 : Number(stock0.tx && stock0.tx[p.id]) || 0;
+        return { id: Number(p.alegraId), price: rt > 0 ? Math.round((Number(l.price) / (1 + rt)) * 100) / 100 : Number(l.price), quantity: Number(l.qty) };
       });
       if (miss.length) {
         const why = 'Faltan enlazar con Alegra: ' + miss.join(', ');
@@ -131,6 +136,7 @@ async function runSync(opts) {
     const curStock = (await fs.getDoc('config', 'stock')) || {};
     const q = Object.assign({}, curStock.q || {});
     let news = prev.news || 0, pulled = false;
+    const pr = Object.assign({}, curStock.pr || {}), tx = Object.assign({}, curStock.tx || {}); let priceChanged = null, priceSuspect = [];
     if (opts.only) {
       out.sent.forEach((code) => {
         const o = pending.filter((x) => x.code === code)[0];
@@ -138,7 +144,7 @@ async function runSync(opts) {
       });
     } else {
       try {
-        const items = await allItems(api, t0 + 22000);
+        const items = await allItems(api, t0 + 22000, { priceList: al.priceList, priceTax: al.priceTax });
         const idx = {}, linkedIds = {};
         items.forEach((it) => { idx[String(it.id)] = it; });
         prods.forEach((p) => {
@@ -146,6 +152,18 @@ async function runSync(opts) {
           linkedIds[String(p.alegraId)] = 1;
           const it = idx[String(p.alegraId)];
           if (it && it.qty != null) q[p.id] = Math.max(0, Math.round(it.qty));
+          /* Los precios salen de Alegra (lista «General»): así nunca se desactualizan */
+          if (it) { if (it.taxRate > 0) tx[p.id] = it.taxRate; else delete tx[p.id]; }
+          if (al.priceAuto !== false && it && it.suspect) {
+            /* El precio de Alegra no supera el costo de compra: casi seguro es la lista equivocada. No se toca el precio de la tienda. */
+            priceChanged = priceChanged || [];
+            priceSuspect.push({ name: p.name + (p.size ? ' ' + p.size : ''), price: it.price, cost: it.cost, list: it.listName });
+          } else if (al.priceAuto !== false && it && it.price > 0) {
+            priceChanged = priceChanged || [];
+            const np = Math.round(it.price), was = Number(pr[p.id]) > 0 ? Number(pr[p.id]) : Number(p.price);
+            if (np !== was) priceChanged.push({ name: p.name + (p.size ? ' ' + p.size : ''), from: was, to: np });
+            pr[p.id] = np;
+          }
         });
         /* Lo que ya se vendió en la página pero aún no llegó a Alegra se descuenta aquí */
         stillPending.forEach((o) => o.lines.forEach((l) => { if (q[l.id] != null) q[l.id] = Math.max(0, q[l.id] - Number(l.qty)); }));
@@ -155,10 +173,14 @@ async function runSync(opts) {
         out.error = out.error || e.message; say('No se pudo leer el inventario de Alegra. ' + e.message);
       }
     }
+    if (pulled && priceSuspect.length) say('Ojo: ' + priceSuspect.length + ' productos tienen en Alegra un precio que no supera el costo de compra (ej.: ' + priceSuspect.slice(0, 3).map((x) => x.name).join(', ') + '). No se cambió su precio en la tienda. Revisa la lista de precios de venta en Alegra.');
     const changed = JSON.stringify(q) !== JSON.stringify(curStock.q || {});
-    if (changed || curStock.on !== true) {
-      await fs.patchDoc('config', 'stock', { q, at: Date.now(), on: true, n: Object.keys(q).length });
+    const pChanged = JSON.stringify(pr) !== JSON.stringify(curStock.pr || {}) || JSON.stringify(tx) !== JSON.stringify(curStock.tx || {});
+    if (changed || pChanged || curStock.on !== true) {
+      await fs.patchDoc('config', 'stock', { q, pr, tx, at: Date.now(), on: true, n: Object.keys(q).length });
       if (pulled && changed) { const nn = Object.keys(q).filter((k) => (curStock.q || {})[k] !== q[k]).length; say('Inventario al día: ' + nn + ' cantidades cambiaron'); }
+      if (pulled && priceChanged && priceChanged.length) say('Precios al día: ' + priceChanged.length + ' precios cambiaron respecto a Alegra');
+      
     }
 
     /* ---- 3) Productos que se están acabando (para el panel y para el celular) ---- */
@@ -169,6 +191,7 @@ async function runSync(opts) {
     const oldLog = Array.isArray(prev.log) ? prev.log : [];
     await fs.patchDoc('private', 'syncstate', {
       at: Date.now(), ok: !out.error, error: out.error, sent: out.sent.length, pending: stillPending.length, news, low, clientId: clientId || '',
+      priceN: priceChanged ? priceChanged.length : (prev.priceN || 0), priceChanged: priceChanged ? priceChanged.slice(0, 15) : (prev.priceChanged || []), priceSuspectN: priceSuspect.length, priceSuspect: priceSuspect.slice(0, 10), priceAt: priceChanged && priceChanged.length ? Date.now() : (prev.priceAt || 0),
       log: log.reverse().concat(oldLog).slice(0, 40)
     });
     out.news = news;
