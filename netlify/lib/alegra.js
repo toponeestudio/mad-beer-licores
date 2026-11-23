@@ -59,7 +59,7 @@ function normItem(it, opts) {
   const c = it.itemCategory || it.category;
   const category = typeof c === 'string' ? c : (c && c.name) || '';
   const price = base > 0 ? Math.round(base * (1 + rate)) : 0;
-  const suspect = !!(base > 0 && cost != null && cost > 0 && base <= cost);
+  const suspect = !!(base > 0 && cost != null && cost > 0 && price <= cost);
   return { id: it.id, name: it.name || '', reference: it.reference || '', category, price, base, taxRate: rate, cost, listName: lst ? String(lst.name || '') : '', suspect, qty, inventariable: qty != null };
 }
 
