@@ -23,7 +23,7 @@ function pickList(it, opts) {
   const lists = (Array.isArray(it.price) ? it.price : []).filter((x) => x && x.price != null && !isNaN(Number(x.price)));
   const bad = (x) => /compra|costo|cost|proveedor/i.test(String(x.name || ''));
   const want = opts && Number(opts.priceList) > 0 ? Number(opts.priceList) : 0;
-  let hit = want ? lists.filter((x) => Number(x.idPriceList) === want)[0] : null;
+  let hit = lists.filter((x) => /llevar/i.test(String(x.name || '')) && Number(x.price) > 0)[0] || (want ? lists.filter((x) => Number(x.idPriceList) === want)[0] : null);
   if (!hit) hit = lists.filter((x) => Number(x.idPriceList) === 1 && !bad(x))[0];
   if (!hit) hit = lists.filter((x) => /general|venta|p[uú]blico|detal/i.test(String(x.name || '')) && !bad(x))[0];
   if (!hit) hit = lists.filter((x) => !bad(x))[0];
